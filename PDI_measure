@@ -1,0 +1,82 @@
+library(doremi)
+library(SimilarityMeasures)
+
+
+Measure <- function(pdp_first_model, pdp_second_model, variable_name) {
+  
+  profile_first_model <- pdp_first_model$agr_profiles
+  profile_second_model <- pdp_second_model$agr_profiles
+  
+  first_model_variable <- subset(profile_first_model,`_vname_`==  variable_name)
+  y_first_model <- first_model_variable[,4]
+  
+  second_model_variable <- subset(profile_second_model,`_vname_`== variable_name)
+  y_second_model <- second_model_variable[,4]
+  
+  x_models_y <- first_model_variable[,3]
+  x_models_z <- second_model_variable[,3]
+  
+  timevec_y <- x_models_y
+  timevec_z <- x_models_z
+  
+  #noisevec <- 0
+
+signal_y <- y_first_model
+signal_noise_y <- signal_y #+ noisevec
+
+der_est_y <- calculate.gold(time = timevec_y,
+                          signal = signal_noise_y,
+                          embedding = 4,
+                          n = 1)
+par(mfrow = c(2,2))
+plot(timevec_y,signal_noise_y)
+plot(der_est_y$dtime,
+     der_est_y$dsignal[,2]
+     ,xlab = "time",
+     ylab = "first derivative")
+
+plot(predict(loess( der_est_y$dsignal[,2] ~ der_est_y$dtime)), xlab = "index", ylab = "loess")
+plot(spline(der_est_y$dsignal[,2] ~ der_est_y$dtime), xlab = "x", ylab = "first derivative spline")
+
+signal_z <- y_second_model
+signal_noise_z <- signal_z #+ noisevec
+
+
+der_est_z <- calculate.gold(time = timevec_z,
+                            signal = signal_noise_z,
+                            embedding = 4,
+                            n = 1)
+
+
+plot(timevec_z,signal_noise_z)
+plot(der_est_z$dtime,
+     der_est_z$dsignal[,2]
+     ,xlab = "time",
+     ylab = "first derivative")
+
+plot(predict(loess( der_est_z$dsignal[,2] ~ der_est_z$dtime)), xlab = "index", ylab = "loess")
+plot(spline(der_est_z$dsignal[,2] ~ der_est_z$dtime), xlab = "x", ylab = "first derivative spline")
+
+spline_y <- spline(der_est_y$dsignal[,2] ~ der_est_y$dtime)
+spline_z <- spline(der_est_z$dsignal[,2] ~ der_est_z$dtime)
+sign_y <- sign(spline_y$y)
+sign_z <- sign(spline_z$y)
+
+measure <- sum(sign_y == sign_z)/length(sign_y)
+
+#KS <- ks.test(y_first_model,y_second_model, alternative = "two.sided")
+
+#korelacja <- cor.test(y_first_model,y_second_model)
+
+#FrechetDist <- FrechetDistance(y_first_model,y_second_model)
+
+print("Measure:")
+print(measure)
+#print("Kolmogorov-Smirnov:")
+#print(KS$p.value)
+#print("Korelacja:")
+#print(korelacja$p.value)
+#print("Frechet:")
+#print(FrechetDist)
+
+}
