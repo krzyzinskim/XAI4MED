@@ -1,0 +1,174 @@
+#
+X2 = rbinom(n = 1000, size = 1, prob = .6)
+data.frame(X2) %>% 
+  ggplot(aes(X2)) + 
+  geom_bar(fill = "cornflower blue", alpha = .6)
+
+X2 = ifelse(X2 == 0, -1, X2)
+
+X1 = rnorm(n = 1000, mean = -1, sd = .8)
+
+X1 = round(X1 / .125) * .125
+X1 = X1 - mean(X1, na.rm = TRUE)
+
+X3 = rnorm(1000 ,0, 10)
+
+head(X3)
+
+X4 = rexp(1000, 0.7)
+
+
+#symulacja zmiennej zaleznej 0-1
+
+Y = 3.15 + 
+  .4 * X1 + 
+  .35 * X2 +
+  .65 * X4 +
+  rnorm(n = 1000, mean = 0, sd = 1)
+
+Y <- ifelse(Y<=4.3, 0, 1)
+Y <- as.factor(Y)
+summary(Y)
+
+simulated_data <- data.frame(Y, X1, X2, X3, X4)
+simulated_data2 <- data.frame(Y,-X1, X2, X3, X4)
+c
+olnames(simulated_data2) <- c("Y", "X1", "X2", "X3", "X4")
+
+simulated_data$X2 <- as.factor(simulated_data$X2)
+simulated_data2$X2 <- as.factor(simulated_data2$X2)
+
+#--- Modeling ----
+
+primary_model = glm(Y ~ X1 + X2 + X3 + X4, data = simulated_data, family = "binomial")
+second_model = glm(Y ~  X1 + X2 + X3 + X4, data = simulated_data2, family = "binomial")
+
+summary(primary_model)
+
+library(DALEX)
+explain_primary_model <- explain(primary_model,
+                                 data = simulated_data,
+                                 y = (simulated_data$Y) == '1')
+
+explain_second_model <- explain(second_model,
+                                data = simulated_data2,
+                                y = (simulated_data2$Y) == '1')
+
+model_performance(explain_primary_model)
+model_performance(explain_second_model)
+
+pdp_primary_model <- model_profile(explain_primary_model)
+plot(pdp_primary_model)
+
+pdp_second_model <- model_profile(explain_second_model)
+plot(pdp_second_model)
+
+plot(pdp_primary_model, pdp_second_model)
+
+####
+
+sample_sim <- sample(c(TRUE, FALSE), 1000, replace=TRUE, prob=c(0.7,0.3))
+
+dane_train_sim  <- simulated_data[sample, ]
+dane_test_sim   <- simulated_data[!sample, ]
+
+task_sim = TaskClassif$new("sim", dane_train_sim, target = "Y")
+testtask_sim = TaskClassif$new("simtest", dane_test_sim, target = "Y")
+
+gbm_learner = LearnerClassifGBM$new()
+gbm_learner$predict_type <- 'prob'
+
+rf_learner = LearnerClassifRanger$new()
+rf_learner$predict_type <- 'prob'
+
+gbm_learner2 = LearnerClassifGBM$new()
+gbm_learner2$predict_type <- 'prob'
+
+rf_learner2 = LearnerClassifRanger$new()
+rf_learner2$predict_type <- 'prob'
+
+### odwrocona zmienna simulated data 2
+
+dane_train_sim2 <- simulated_data2[sample,]
+dane_test_sim2 <- simulated_data2[!sample,]  
+
+task_sim2 = TaskClassif$new("sim2", dane_train_sim2, target = "Y")
+testtask_sim2 = TaskClassif$new("simtest2", dane_test_sim2, target = "Y")
+
+####Modele
+
+model_gbm_sim <- gbm_learner$train(task_sim)
+
+model_rf_sim <- rf_learner$train(task_sim)
+
+model_gbm_sim2 <- gbm_learner2$train(task_sim2)
+
+model_rf_sim2 <- rf_learner2$train(task_sim2)
+
+##### Wyjasnienia 
+
+explain_gbm_sim <- explain(model_gbm_sim,
+                               data = testtask_sim$data(),
+                               y = (testtask_sim$data()[[testtask_sim$target_names]]) == '1',
+                               predict_function = function(m,x)
+                                 predict(m, x, predict_type = "prob")[,2],
+                               label = 'gbm sim',
+                               type = "classification")
+
+model_performance(explain_gbm_sim)
+
+explain_rf_sim <- explain(model_rf_sim,
+                              data = testtask_sim$data(),
+                              y = (testtask_sim$data()[[testtask_sim$target_names]]) == '1',
+                              predict_function = function(m,x)
+                                predict(m, x, predict_type = "prob")[,2],
+                              label = 'rf sim',
+                              type = "classification")
+
+
+model_performance(explain_rf_sim)
+
+
+###2
+
+explain_gbm_sim2 <- explain(model_gbm_sim2,
+                                data = testtask_sim2$data(),
+                                y = (testtask_sim2$data()[[testtask_sim2$target_names]]) == '1',
+                                predict_function = function(m,x)
+                                  predict(m, x, predict_type = "prob")[,2],
+                                label = 'gbm sim2',
+                                type = "classification")
+
+
+
+explain_rf_sim2 <- explain(model_rf_sim2,
+                               data = testtask_sim2$data(),
+                               y = (testtask_sim2$data()[[testtask_sim2$target_names]]) == '1',
+                               predict_function = function(m,x)
+                                 predict(m, x, predict_type = "prob")[,2],
+                               label = 'rf sim2',
+                               type = "classification")
+
+
+model_performance(explain_rf_sim)
+
+model_performance(explain_gbm_sim2)
+
+pdp_rf_sim <- model_profile(explain_rf_sim)
+plot(pdp_rf_sim)
+
+pdp_gbm_sim <- model_profile(explain_gbm_sim)
+plot(pdp_rf_sim,pdp_gbm_sim)
+
+
+pdp_rf_sim2 <- model_profile(explain_rf_sim2)
+plot(pdp_rf_sim2)
+
+pdp_gbm_sim2 <- model_profile(explain_gbm_sim2)
+plot(pdp_gbm_sim2)
+
+plot(pdp_rf_sim,pdp_rf_sim2,pdp_gbm_sim2,pdp_gbm_sim)
+
+Measure(pdp_rf_sim, pdp_rf_sim2, "X4")
+
+
