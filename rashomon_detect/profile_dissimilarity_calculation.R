@@ -16,28 +16,38 @@ calculate_single_distance <-
     if (length(profiles_j) == 0) {
       profiles_j <- rep(0, length(profiles_i))
     }
-    
+
     distance <-
       pdi_method(profiles_i_var, profiles_j_var, profiles_var_vals)
     distance
   }
 
+
 calculate_all_distances <-
-  function(profiles_list, pdi_method = derivative_fraction_sign_difference) {
-    num_models <- length(profiles_list)
-    all_vnames <-
-      unique(unlist(lapply(profiles_list, function(df)
-        unique(df$agr_profiles$`_vname_`))))
-    num_vars <- length(all_vnames)
+  function(profiles_numerical,
+           profiles_categorical,
+           pdi_method_numerical,
+           pdi_method_categorical) {
+    num_models <- length(profiles_numerical)
+    
+    all_vnames_numerical <- unique(unlist(
+      lapply(profiles_numerical, function(df)
+        unique(df$agr_profiles$`_vname_`))
+    ))
+    
+    all_vnames_categorical <- unique(unlist(
+      lapply(profiles_categorical, function(df)
+        unique(df$agr_profiles$`_vname_`))
+    ))
     
     # Create an empty matrix to store the distances
     dist_matrix <-
       matrix(
         0,
         nrow = num_models * (num_models - 1) / 2,
-        ncol = 2 + num_vars,
+        ncol = 2 + length(all_vnames_numerical) + length(all_vnames_categorical),
         dimnames = list(NULL, c(
-          "model_ind_1", "model_ind_2", all_vnames
+          "model_ind_1", "model_ind_2", all_vnames_numerical, all_vnames_categorical
         ))
       )
     
@@ -47,13 +57,26 @@ calculate_all_distances <-
     # Iterate over each pair of models
     for (i in 1:(num_models - 1)) {
       for (j in (i + 1):num_models) {
-        profiles_i <- profiles_list[[i]]$agr_profiles
-        profiles_j <- profiles_list[[j]]$agr_profiles
+        profiles_num_i <- profiles_numerical[[i]]$agr_profiles
+        profiles_num_j <- profiles_numerical[[j]]$agr_profiles
         
-        for (k in 1:num_vars) {
-          vname <- all_vnames[k]
+        profiles_cat_i <- profiles_categorical[[i]]$agr_profiles
+        profiles_cat_j <- profiles_categorical[[j]]$agr_profiles
+        
+        for (k in seq_along(all_vnames_numerical)) {
+          vname <- all_vnames_numerical[k]
           distance <-
-            calculate_single_distance(profiles_i, profiles_j, vname, pdi_method)
+            calculate_single_distance(profiles_num_i, profiles_num_j, vname, pdi_method_numerical)
+          
+          dist_matrix[row_counter, "model_ind_1"] <- i
+          dist_matrix[row_counter, "model_ind_2"] <- j
+          dist_matrix[row_counter, vname] <- distance
+        }
+        
+        for (k in seq_along(all_vnames_categorical)) {
+          vname <- all_vnames_categorical[k]
+          distance <-
+            calculate_single_distance(profiles_cat_i, profiles_cat_j, vname, pdi_method_categorical)
           
           dist_matrix[row_counter, "model_ind_1"] <- i
           dist_matrix[row_counter, "model_ind_2"] <- j
@@ -68,10 +91,12 @@ calculate_all_distances <-
     dist_matrix
   }
 
-calculate_distances_to_last_model <- function(profiles_list,
-                                              pdi_method,
-                                              num_vars,
-                                              all_vnames,
+calculate_distances_to_last_model <- function(profiles_numerical,
+                                              profiles_categorical,
+                                              pdi_method_numerical,
+                                              pdi_method_categorical,
+                                              all_vnames_numerical, 
+                                              all_vnames_categorical,
                                               unique_models,
                                               selected_models_indices) {
   last_model_index <-
@@ -83,22 +108,34 @@ calculate_distances_to_last_model <- function(profiles_list,
     matrix(
       0,
       nrow = length(available_models),
-      ncol = 2 + num_vars,
+      ncol = 2 + length(all_vnames_numerical) + length(all_vnames_categorical),
       dimnames = list(NULL, c(
-        "model_ind_1", "model_ind_2", all_vnames
+        "model_ind_1", "model_ind_2", all_vnames_numerical, all_vnames_categorical
       ))
     )
   
   for (j in 1:length(available_models)) {
     model_to_test <- available_models[j]
-    profiles_i <- profiles_list[[last_model_index]]$agr_profiles
-    profiles_j <- profiles_list[[model_to_test]]$agr_profiles
+    profiles_num_i <- profiles_numerical[[last_model_index]]$agr_profiles
+    profiles_num_j <- profiles_numerical[[model_to_test]]$agr_profiles
     
-    for (k in 1:num_vars) {
-      vname <- all_vnames[k]
+    profiles_cat_i <- profiles_categorical[[last_model_index]]$agr_profiles
+    profiles_cat_j <- profiles_categorical[[model_to_test]]$agr_profiles
+    
+    for (k in seq_along(all_vnames_numerical)) {
+      vname <- all_vnames_numerical[k]
       distance <-
-        calculate_single_distance(profiles_i, profiles_j, vname, pdi_method)
+        calculate_single_distance(profiles_num_i, profiles_num_j, vname, pdi_method_numerical)
       
+      dist_matrix[j, "model_ind_1"] <- last_model_index
+      dist_matrix[j, "model_ind_2"] <- model_to_test
+      dist_matrix[j, vname] <- distance
+    }
+    
+    for (k in seq_along(all_vnames_categorical)) {
+      vname <- all_vnames_categorical[k]
+      distance <-
+        calculate_single_distance(profiles_cat_i, profiles_cat_j, vname, pdi_method_categorical)
       dist_matrix[j, "model_ind_1"] <- last_model_index
       dist_matrix[j, "model_ind_2"] <- model_to_test
       dist_matrix[j, vname] <- distance

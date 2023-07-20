@@ -1,9 +1,10 @@
 rashomon_detect <- function(explainers_list,
                             performance_measure = NULL,
                             k = 2,
-                            pdi_method = derivative_fraction_sign_difference,
-                            comparison = "all",
-                            variables = NULL,
+                            pdi_method_numerical = derivative_fraction_sign_difference,
+                            pdi_method_categorical = categorical_distance,
+                            comparison = "last",
+                            include_categorical_variables = TRUE,
                             N = NULL,
                             variable_splits = NULL) {
   if (is.null(performance_measure)) {
@@ -21,29 +22,43 @@ rashomon_detect <- function(explainers_list,
   best_performing_model_index <-
     get_best_performing_model_index(performance_vals, best_performance_val)
   
-  profiles <- lapply(
+  res <- list()
+  res$explainers <- explainers_list
+  res$performances <- performance_vals
+  
+  profiles_numerical <- lapply(
     explainers_list,
     model_profile,
-    variables = variables,
     N = N,
     variable_splits = variable_splits
   )
+  res$profiles_numerical <- profiles_numerical
   
-  res <- list()
-  res$explainers <- explainers_list
-  res$profiles <- profiles
-  res$performances <- performance_vals
-  res$rejected_due_to_performance_models_indices <- numeric(0)
-  
+  profiles_categorical <- NULL
+  if (include_categorical_variables & !all(sapply(explainers_list[[1]]$data, is.numeric))){
+    profiles_categorical <- lapply(
+      explainers_list,
+      model_profile,
+      N = N,
+      variable_type = "categorical"
+    )
+    res$profiles_categorical <- profiles_categorical
+  }
+
   if (comparison == "all") {
-    distances <- calculate_all_distances(profiles, pdi_method)
+    distances <- calculate_all_distances(profiles_numerical, 
+                                         profiles_categorical, 
+                                         pdi_method_numerical, 
+                                         pdi_method_categorical)
     selected_models_indices <-
       select_most_different_models_all(distances,
                                        k,
                                        best_performing_model_index)
   } else if (comparison == "last") {
-    tmp <- select_most_different_models_last(profiles,
-                                             pdi_method,
+    tmp <- select_most_different_models_last(profiles_numerical,
+                                             profiles_categorical,
+                                             pdi_method_numerical,
+                                             pdi_method_categorical,
                                              k,
                                              best_performing_model_index)
     distances <- tmp$distances

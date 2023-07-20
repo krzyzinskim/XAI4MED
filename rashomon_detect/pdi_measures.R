@@ -34,3 +34,7 @@ derivative_euclidean_distance <- function(profile1, profile2, xargs){
     fdata(profile2, argvals = xargs)
   ))
 }
+
+categorical_distance <- function(profile1, profile2, xargs){
+  dist(rbind(profile1, profile2))[1]
+}
