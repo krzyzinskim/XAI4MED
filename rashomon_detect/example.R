@@ -10,28 +10,22 @@ library(ranger)
 library(randomForest)
 library(gbm)
 
-X <- matrix(rnorm(2000*10), ncol=10)
-y <- as.numeric(rowSums(X) + X[,1]^2 - X[,2]^2 + rnorm(2000) > 0)
-
-train_indices <- sample(1:length(y), 1600)
-
-df_train <- data.frame(X[train_indices,], y=y[train_indices])
-df_test <- data.frame(X[-train_indices,], y=y[-train_indices])
-
-
-#--- Modeling ----
-
-model1 = glm(y ~ ., data = df_train, family = binomial)
-model2 = ranger(y ~ ., data = df_train, classification = TRUE, num.trees=100)
-model3 = randomForest(factor(y) ~ ., data = df_train, ntree=100)
-model4 = gbm(y ~ ., data = df_train, distribution = "bernoulli")
+model1 <- ranger(survived ~ gender + age + class + embarked +
+                             fare + sibsp + parch,  data = titanic_imputed,
+                           classification = TRUE)
+model2 <- glm(survived ~ gender + age + class + embarked +
+                fare + sibsp + parch,  data = titanic_imputed, family = binomial)
+model3 <- randomForest(factor(survived) ~ gender + age + class + embarked +
+                         fare + sibsp + parch,  data = titanic_imputed, ntree=100)
+model4 <- gbm(survived ~ gender + age + class + embarked + fare + sibsp + parch,
+              data = titanic_imputed, distribution = "bernoulli")
 
 explainers <- make_explainer_list(model1, model2, model3, model4, 
-                                  data = df_test[, 1:10], y = df_test[, 11])
+                                  data = titanic_imputed[, -8], y = titanic_imputed$survived)
 
 res <- rashomon_detect(explainers, 
                        k=3, 
-                       pdi_method = derivative_euclidean_distance, 
+                       pdi_method_numerical = derivative_euclidean_distance, 
                        comparison = "last"
                       )
 res
